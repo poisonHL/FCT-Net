@@ -29,7 +29,6 @@ class FastLeFF(nn.Module):
         self.linear1 = nn.Sequential(nn.Linear(dim, hidden_dim),
                                      act_layer())
         self.dwconv1 = nn.Sequential(S_conv(hidden_dim, hidden_dim * 2), act_layer())
-        # self.dwconv1 = nn.Sequential(DeformableConv2d(hidden_dim, hidden_dim, 3), act_layer(),self.norm())
         self.dwconv2 = nn.Sequential(S_conv(hidden_dim, hidden_dim), act_layer())
         self.linear2 = nn.Sequential(nn.Linear(hidden_dim, dim))
         self.dim = dim
@@ -113,8 +112,7 @@ class Attention(nn.Module):
         if flag ==0:
             self.group_size = (7,7)  # Wh, Ww
         else:
-            self.group_size = (self.resolution//8, self.resolution//8)  # Wh, Ww
-        # self.group_size = group_size  # Wh, Ww
+            self.group_size = (self.resolution//8, self.resolution//8)  
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
@@ -234,21 +232,16 @@ class Block(nn.Module):
             qkv_bias=True, qk_scale=None, attn_drop=0, proj_drop=0.1,
             position_bias=True, flag=1)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        #以上为新增
 
-        #self.windows_size = window_size #调换位置
-        # self.wsa = WindowAttention(num_feat, (window_size, window_size), heads)
         mlp_hidden_dim = int(num_feat * mlp_ratio)
-        # self.mlp = DWMlp(in_features=num_feat, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop, res=input_resolution)
         self.mlp = FastLeFF(num_feat)
         self.conv_b = Conv_block(num_feat,num_feat)
 
     def forward(self, x):
         B, N, C = x.shape
         H = W = int(N**0.5)
-        #x_1 = self.norm1(x)
         x_res = x
-        #以下为新增
+       
         x = x.permute(0, 2, 1).reshape(B, C, H, W)
         x = self.norm3(self.c2(self.act(self.norm3(self.c1(x))))) # 新增
         x = x.reshape(B, C, -1).permute(0, 2, 1)
@@ -340,7 +333,7 @@ class Block(nn.Module):
         # MLP
         x = shortcut1 + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm1(x)))
-        #增3*3卷积块
+        #3*3卷积块
         x = to_3d(self.conv_b(to_4d(x,H,W)))
         x = x_res + x
         return x
@@ -348,11 +341,7 @@ class Block(nn.Module):
 
 if __name__ == '__main__':
     x = torch.rand(1, 16384, 96).cuda()
-    # y = torch.rand(1, 128, 128, 96).cuda()
-    # model = CAB(96, 3, 16).cuda()
     model = Block(96, 128, 4,).cuda()
-    # model = WindowAttention(96, (4, 4), 8).cuda()
-    # out = model(x)
-    # out = window_partition(y, 4).reshape(1024, 16, 96)
     out = model(x)
     print(out.shape)
+
