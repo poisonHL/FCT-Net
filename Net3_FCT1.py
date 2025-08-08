@@ -31,11 +31,8 @@ class DeBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(in_channels)
         self.relu1 = nn.ReLU(inplace=True)
         self.bn2 = nn.BatchNorm2d(in_channels)
-        # self.conv1 = nn.Conv3d(in_channels, in_channels, kernel_size=3, padding=1)
         self.conv2 = S_conv(in_channels, in_channels)
-        # self.bn2 = nn.BatchNorm2d(in_channels)
         self.relu2 = nn.ReLU(inplace=True)
-        # self.conv2 = nn.Conv3d(in_channels, in_channels, kernel_size=3, padding=1)
 
     def forward(self, x):
         B, N, C = x.shape
@@ -185,7 +182,6 @@ class Trans_CNN_DeBlock(nn.Module):
         x2 = self.bn1(x_T)
         x2 = self.relu1(x_T)
         x2 = x2 + x_T
-        ###新增
         x_ = x1.permute(0, 2, 3, 1).contiguous()#B, H, W, C
         y_ = x2.permute(0, 2, 3, 1).contiguous()
         x = x_.view(x_.size(0), x_.size(2) * x_.size(1), -1)
@@ -221,7 +217,7 @@ class Trans_CNN_DeBlock(nn.Module):
         x = x.view(x.size(0), x.size(1), H, W)
         y = self.linear_encoding_de(y).permute(0, 2, 1).contiguous()
         y = y.view(y.size(0), y.size(1), H, W)
-        # # 增3*3卷积块
+        # 3*3卷积块
         # x = self.conv_b(x)
         # x = x+ x_Cres
         # y = self.conv_b(y)
@@ -250,13 +246,9 @@ class ChannelAttention(nn.Module):
 
     def forward(self, x):
         y1 = self.attention(x)
-        # print(x.shape)
         x_1 = x * y1
-        # print(x_1.shape)
         x1, x2 = x_1.chunk(2, dim=1)
-        # print(x1.shape)
         x1 = self.cab0(x1)
-        # print(x1.shape)
         x_2 = F.gelu(x2) * x1
         x_2 = self.cab1(x_2)
         out = x * x_2  # 改进
@@ -284,7 +276,7 @@ class ASPP(nn.Module):
         self.mean = nn.AdaptiveAvgPool2d((1, 1))  # (1,1)means ouput_dim
         self.conv = S_conv(in_channel, out_channel, 3, 1)
         self.layer = layer
-    #
+        #
         self.atrous_block1 = nn.Conv2d(in_channel, out_channel, 1, 1)
         self.atrous_block3 = nn.Conv2d(in_channel, out_channel, 3, 1, padding=2, dilation=2)
         self.atrous_block6 = nn.Conv2d(in_channel, out_channel, 3, 1, padding=3, dilation=3)
@@ -298,7 +290,6 @@ class ASPP(nn.Module):
         self.conv1 = S_conv(in_channel, in_channel)
         self.ca = ChannelAttention(in_channel, squeeze_factor)
         self.sa = SpatialAttentionModule()
-        # self.sda =IDynamicSa(in_channel,window_size=7,heads=6)
         #
         self.conv_ = nn.Conv2d(in_channel, in_channel, 3, 1, 1)
 
@@ -307,11 +298,6 @@ class ASPP(nn.Module):
         H = W = int(N ** 0.5)
         x = x.reshape(B, H, W, C).permute(0, 3, 1, 2)
         size = x.shape[2:]
-        # if not self.layer:
-        #
-        #     x = self.sa(x)
-        # else:
-        #     x = self.sa(x)
         x = self.ca(x)
         x = self.sa(x)
         image_features = self.mean(x)
@@ -325,8 +311,7 @@ class ASPP(nn.Module):
         atrous_block18 = self.atrous_block18(self.act(self.bn(self.atrous_block18(x))))
         net = self.conv_1x1_output(torch.cat([image_features, atrous_block1, atrous_block3, atrous_block6,
                                               atrous_block12, atrous_block18], dim=1))
-        # net = self.ca(net)
-        # net = self.sa(net)
+       
         net = self.act(self.bn(self.conv_(net)))
 
         return to_3d(net)
@@ -358,7 +343,6 @@ class Embed(nn.Module):
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
         x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
-        # _, _, H, W = x.shape
         if self.norm is not None:
             x = self.norm(x)
         return x
@@ -402,44 +386,26 @@ class Net(nn.Module):
         self.embed = Embed(512)
 
         self.l1 = nn.Sequential(
-            # Block(96, 128, 4, 8, 3, 16),
-            # Block(96, 128, 4, 8, 3, 16),
-            # Block(96, 128, 4, 8, 3, 16),
-            # Block(96, 128, 4, 8, 3, 16)
             Block(96, 128, 4),
             Block(96, 128, 4),
             Block(96, 128, 4),
                                 )
 
         self.l2 = nn.Sequential(
-            # Block(192, 64, 4, 8, 3, 16),
-            # Block(192, 64, 4, 8, 3, 16),
-            # Block(192, 64, 4, 8, 3, 16),
-            # Block(192, 64, 4, 8, 3, 16)
             Block(192, 64, 4),
             Block(192, 64, 4),
             Block(192, 64, 4),
                                 )
 
         self.l3 = nn.Sequential(
-            # Block(384, 32, 4, 8, 3, 16),
-            # Block(384, 32, 4, 8, 3, 16),
-            # Block(384, 32, 4, 8, 3, 16),
-            # Block(384, 32, 4, 8, 3, 16)
             Block(384, 32, 4),
             Block(384, 32, 4),
-            # Block(384, 32, 4),
                                 )
 
         self.l4 = nn.Sequential(
-            # Block(768, 16, 2, 8, 3, 16),
-            # Block(768, 16, 2, 8, 3, 16),
-            # Block(768, 16, 2, 8, 3, 16),
-            # Block(768, 16, 2, 8, 3, 16)
             Block(768, 16, 2),
             Block(768, 16, 2),
             Block(768, 16, 2),
-            # Block(768, 16, 2),
                                 )
 
         self.m1 = Merge(96, 128, 128)
@@ -451,30 +417,17 @@ class Net(nn.Module):
         self.p1 = Expand(192, 64)
 
         self.d3 = nn.Sequential(
-            # Block(384, 32, 4, 8, 3, 16),
-            # Block(384, 32, 4, 8, 3, 16),
-            # Block(384, 32, 4, 8, 3, 16),
-            # Block(384, 32, 4, 8, 3, 16)
             Block(384, 32, 4),
-            Block(384, 32, 4),
-            # Block(384, 32, 4)
+            Block(384, 32, 4)
                                 )
 
         self.d2 = nn.Sequential(
-            # Block(192, 64, 4, 8, 3, 16),
-            # Block(192, 64, 4, 8, 3, 16),
-            # Block(192, 64, 4, 8, 3, 16),
-            # Block(192, 64, 4, 8, 3, 16)
             Block(192, 64, 4),
             Block(192, 64, 4),
             Block(192, 64, 4),
                                 )
 
         self.d1 = nn.Sequential(
-            # Block(96, 128, 4, 8, 3, 16),
-            # #Block(96, 128, 4, 8, 3, 16),
-            # Block(96, 128, 4, 8, 3, 16),
-            # Block(96, 128, 4, 8, 3, 16)
             Block(96, 128, 4),
             Block(96, 128, 4),
             Block(96, 128, 4),
@@ -494,10 +447,6 @@ class Net(nn.Module):
         self.pas_96 = PSA_p(96, 96)
         self.pas_192 = PSA_p(192, 192)
         self.pas_384 = PSA_p(384, 384)
-        # # sobel 模块增
-        # self.finalfuss_384 = FinalFuse(384, 192)
-        # self.finalfuss_192 = FinalFuse(192, 96)
-
         self.up = nn.PixelShuffle(4)
         self.seg = nn.Conv2d(6, 1, 1)
         #
@@ -512,7 +461,6 @@ class Net(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-
         #
         x_pool  = x
         x = self.embed(x)  # torch.Size([1, 16384, 96])
@@ -572,3 +520,4 @@ if __name__ == '__main__':
     # print(out.shape)
     # out = dbm(y)
     # print(out.shape)
+
